@@ -27,7 +27,13 @@ hujan = st.sidebar.slider("Curah Hujan (mm)",0,200,60)
 
 jarak = st.sidebar.slider("Jarak Perjalanan (km)",10,500,100)
 
-harga = st.sidebar.slider("Harga Tiket (Rp)",50000,400000,150000)
+# PERBAIKAN: harga tiket mulai 5000
+harga = st.sidebar.slider(
+"Harga Tiket (Rp)",
+5000,
+400000,
+50000
+)
 
 kepadatan = st.sidebar.slider("Kepadatan Penumpang",0.3,1.0,0.6)
 
@@ -54,7 +60,7 @@ lambda_claim = np.exp(
 -3
 +0.01*hujan
 +0.002*jarak
-+0.000002*harga
++0.000004*harga
 +1.2*kepadatan
 +0.03*jam
 +0.2*jenis_val
@@ -63,6 +69,10 @@ lambda_claim = np.exp(
 severity = harga
 
 premi = lambda_claim * severity
+
+# minimum premi agar realistis
+if premi < 2000:
+    premi = 2000
 
 # =====================================
 # METRIC DASHBOARD
@@ -99,18 +109,18 @@ np.random.seed(42)
 sim_claim = np.random.poisson(lambda_claim,1000)
 
 df_chart = pd.DataFrame({
-"Jumlah Klaim":sim_claim
+"Klaim":sim_claim
 })
 
-dist = df_chart["Jumlah Klaim"].value_counts().sort_index()
+dist = df_chart["Klaim"].value_counts().sort_index()
 
 dist_df = pd.DataFrame({
-"Klaim":dist.index,
+"Jumlah Klaim":dist.index,
 "Frekuensi":dist.values
 })
 
 st.bar_chart(
-dist_df.set_index("Klaim")
+dist_df.set_index("Jumlah Klaim")
 )
 
 # =====================================
