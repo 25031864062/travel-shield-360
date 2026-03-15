@@ -1,44 +1,69 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.linear_model import PoissonRegressor
 
 # ===============================
-# KONFIGURASI HALAMAN
+# KONFIGURASI
 # ===============================
 
 st.set_page_config(
-    page_title="TravelShield 360",
+    page_title="TravelShield 360 Dashboard",
     page_icon="🛡️",
     layout="wide"
 )
 
-# ===============================
-# CSS TAMPILAN
-# ===============================
-
-st.markdown("""
-<style>
-.main {
-    background-color: #f5f7f9;
-}
-div[data-testid="metric-container"] {
-    background-color: white;
-    padding: 15px;
-    border-radius: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ===============================
-# JUDUL
-# ===============================
-
 st.title("🛡️ TravelShield 360")
-st.subheader("Kalkulator Premi Aktuaria Kereta Api")
+st.subheader("Dashboard Aktuaria Risiko Perjalanan Kereta")
 
-st.write(
-"Model menggunakan pendekatan **GLM Poisson-Gamma** untuk menghitung premi perjalanan."
+# ===============================
+# GENERATE DATA SIMULASI
+# ===============================
+
+np.random.seed(42)
+
+n = 1000
+
+data = pd.DataFrame({
+    "hujan": np.random.uniform(0,200,n),
+    "jarak": np.random.uniform(10,500,n),
+    "harga_tiket": np.random.uniform(50000,400000,n),
+    "kepadatan": np.random.uniform(0.3,1.0,n),
+    "jam": np.random.randint(0,24,n)
+})
+
+data["jenis_kereta"] = np.random.choice([0,1,2],n)
+
+lambda_claim = np.exp(
+    -3
+    +0.01*data["hujan"]
+    +0.002*data["jarak"]
+    +0.000002*data["harga_tiket"]
+    +1.2*data["kepadatan"]
+    +0.03*data["jam"]
+    +0.2*data["jenis_kereta"]
 )
+
+data["klaim"] = np.random.poisson(lambda_claim)
+
+# ===============================
+# TRAIN MODEL
+# ===============================
+
+X = data[[
+"hujan",
+"jarak",
+"harga_tiket",
+"kepadatan",
+"jam",
+"jenis_kereta"
+]]
+
+y = data["klaim"]
+
+model = PoissonRegressor()
+model.fit(X,y)
 
 # ===============================
 # SIDEBAR INPUT
@@ -46,86 +71,99 @@ st.write(
 
 st.sidebar.header("Parameter Risiko")
 
-hujan = st.sidebar.slider(
-    "Curah Hujan (mm)",
-    0.0, 250.0, 65.0
+hujan = st.sidebar.slider("Curah Hujan (mm)",0,200,60)
+
+jarak = st.sidebar.slider("Jarak Perjalanan (km)",10,500,100)
+
+harga = st.sidebar.slider("Harga Tiket (Rp)",50000,400000,150000)
+
+kepadatan = st.sidebar.slider(
+"Kepadatan Penumpang",
+0.3,1.0,0.6
 )
 
-jarak = st.sidebar.slider(
-    "Jarak Perjalanan (km)",
-    1.0, 800.0, 55.0
+jam = st.sidebar.slider(
+"Jam Perjalanan",
+0,23,12
 )
 
-harga_tiket = st.sidebar.slider(
-    "Harga Tiket (Rp)",
-    20000, 600000, 150000, step=5000
+jenis = st.sidebar.selectbox(
+"Jenis Kereta",
+["Ekonomi","Bisnis","Eksekutif"]
+)
+
+# encoding jenis kereta
+jenis_map = {
+"Ekonomi":0,
+"Bisnis":1,
+"Eksekutif":2
+}
+
+jenis_val = jenis_map[jenis]
+
+# ===============================
+# PREDIKSI
+# ===============================
+
+input_df = pd.DataFrame({
+"hujan":[hujan],
+"jarak":[jarak],
+"harga_tiket":[harga],
+"kepadatan":[kepadatan],
+"jam":[jam],
+"jenis_kereta":[jenis_val]
+})
+
+freq = model.predict(input_df)[0]
+
+severity = harga
+
+premi = freq * severity
+
+# ===============================
+# DASHBOARD METRIC
+# ===============================
+
+col1,col2,col3 = st.columns(3)
+
+col1.metric("Expected Claim Frequency",round(freq,4))
+
+col2.metric(
+"Severity",
+f"Rp {severity:,.0f}".replace(",",".")
+)
+
+col3.metric(
+"Premi Aktuaria",
+f"Rp {premi:,.0f}".replace(",",".")
 )
 
 # ===============================
-# PERHITUNGAN AKTUARIA
-# ===============================
-
-total_penumpang = 29074750
-biaya_klaim_tahunan = 201213297219
-
-premi_dasar = biaya_klaim_tahunan / total_penumpang
-
-# Faktor risiko
-y1 = np.exp(0.008 * (hujan - 65))
-y2 = np.exp(0.00007 * (jarak - 55))
-
-harga_rata = 150000
-y3 = np.exp(0.000002 * (harga_tiket - harga_rata))
-
-# Premi murni
-premi_murni = premi_dasar * y1 * y2 * y3
-
-# Premi bruto
-premi_bruto = (premi_murni * 1.2) + 2500
-premi_bruto = max(premi_bruto, 5000)
-
-# ===============================
-# HASIL PERHITUNGAN
-# ===============================
-
-st.subheader("Hasil Perhitungan Premi")
-
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("Faktor Cuaca", f"{y1:.3f}x")
-col2.metric("Faktor Jarak", f"{y2:.3f}x")
-col3.metric("Faktor Harga Tiket", f"{y3:.3f}x")
-col4.metric(
-    "Premi Bruto",
-    f"Rp {premi_bruto:,.0f}".replace(",", ".")
-)
-
-# ===============================
-# GRAFIK PREMI
+# DISTRIBUSI KLAIM
 # ===============================
 
 st.markdown("---")
+st.subheader("Distribusi Klaim")
 
-st.subheader("Visualisasi Premi")
+fig,ax = plt.subplots()
 
-data_chart = pd.DataFrame({
-    "Jenis Premi": ["Premi Murni", "Premi Bruto"],
-    "Nilai": [premi_murni, premi_bruto]
-})
+ax.hist(data["klaim"],bins=20)
 
-st.bar_chart(data_chart.set_index("Jenis Premi"))
+ax.set_xlabel("Jumlah Klaim")
+ax.set_ylabel("Frekuensi")
+
+st.pyplot(fig)
 
 # ===============================
 # PETA LOKASI
 # ===============================
 
 st.markdown("---")
-
-st.subheader("Lokasi Kereta (Simulasi)")
+st.subheader("Simulasi Lokasi Kereta")
 
 map_data = pd.DataFrame({
-    "lat": [-7.2504],
-    "lon": [112.7508]
+"lat":[-7.2504],
+"lon":[112.7508]
 })
 
 st.map(map_data)
@@ -135,68 +173,39 @@ st.map(map_data)
 # ===============================
 
 st.markdown("---")
-
 st.subheader("Simulasi Klaim")
 
 jenis_klaim = st.selectbox(
-    "Pilih Jenis Klaim",
-    [
-        "Keterlambatan Kereta",
-        "Pembatalan Perjalanan"
-    ]
+"Pilih Jenis Klaim",
+["Delay Kereta","Pembatalan Perjalanan"]
 )
 
-# ===============================
-# KLAIM DELAY
-# ===============================
+if jenis_klaim == "Delay Kereta":
 
-if jenis_klaim == "Keterlambatan Kereta":
-
-    menit = st.number_input(
-        "Masukkan keterlambatan (menit)",
-        0, 480, 0
+    delay = st.number_input(
+    "Keterlambatan (menit)",0,300
     )
 
-    if menit >= 60:
+    if delay >= 60:
 
-        santunan = harga_tiket
-
-        st.balloons()
+        santunan = harga
 
         st.success(
-            f"Klaim Disetujui! Refund 100% Tiket: Rp {santunan:,.0f}".replace(",", ".")
+        f"Refund 100% Tiket: Rp {santunan:,.0f}".replace(",",".")
         )
 
     else:
 
         st.warning(
-            "Keterlambatan kurang dari 60 menit tidak memenuhi syarat klaim."
+        "Delay kurang dari 60 menit tidak memenuhi syarat klaim"
         )
-
-# ===============================
-# KLAIM PEMBATALAN
-# ===============================
 
 if jenis_klaim == "Pembatalan Perjalanan":
 
-    alasan = st.selectbox(
-        "Alasan Pembatalan",
-        [
-            "Sakit / Darurat",
-            "Cuaca Ekstrem",
-            "Gangguan Operasional",
-            "Perubahan Rencana"
-        ]
-    )
+    if st.button("Ajukan Refund"):
 
-    if st.button("Ajukan Klaim"):
-
-        santunan = harga_tiket
-
-        st.balloons()
+        santunan = harga
 
         st.success(
-            f"Klaim Pembatalan Disetujui! Refund 100% Tiket: Rp {santunan:,.0f}".replace(",", ".")
+        f"Refund 100% Tiket: Rp {santunan:,.0f}".replace(",",".")
         )
-
-        st.info(f"Alasan pembatalan: {alasan}")
