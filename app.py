@@ -1,70 +1,63 @@
 import streamlit as st
-import math
+import numpy as np
 
-# --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="TravelShield 360", page_icon="🛡️", layout="centered")
+# Konfigurasi Halaman
+st.set_page_config(page_title="TravelShield 360 ITB", page_icon="🛡️")
 
-# --- FUNGSI INTI AKTUARIA (DARI KODE SEBELUMNYA) ---
-def hitung_layanan_travelshield(jarak_km, curah_hujan_mm, tipe_asuransi):
-    # Parameter GLM
-    beta_0, beta_1, alpha_1 = -10.12, 0.005, 0.000777
-    alpha_0 = 15.5 if tipe_asuransi == "Ekonomi" else 17.7 if tipe_asuransi == "Premium" else 19.07
-    
-    # Kalkulasi Aktuaria
-    peluang_y1 = (jarak_km / 59.47) * math.exp(beta_0 + (beta_1 * curah_hujan_mm))
-    biaya_y2 = math.exp(alpha_0 + (alpha_1 * curah_hujan_mm))
-    
-    # Pricing
-    tarif_tiket = jarak_km * 1500
-    premi = round((peluang_y1 * biaya_y2 / 0.70) / 500) * 500
-    if premi < 2000: premi = 2000
-    
-    return tarif_tiket, premi, peluang_y1, biaya_y2
-
-# --- TAMPILAN WEBSITE ---
-st.title("🛡️ TravelShield 360")
-st.subheader("Sistem Proteksi Perjalanan Berbasis Risiko Cuaca")
-st.markdown("---")
+st.title("🛡️ TravelShield 360: Kalkulator Premi")
+st.write("Implementasi Model GLM (Poisson-Gamma) Berdasarkan Riset MCF ITB")
 
 # --- SIDEBAR INPUT ---
-st.sidebar.header("Konfigurasi Perjalanan")
-jarak = st.sidebar.slider("Jarak Tempuh (KM)", 10, 500, 100)
-hujan = st.sidebar.number_input("Curah Hujan (mm)", min_value=0, max_value=300, value=50)
-tipe = st.sidebar.selectbox("Tipe Perlindungan", ["Ekonomi", "Premium", "Luxury"])
+st.sidebar.header("📍 Parameter Input")
+hujan = st.sidebar.slider("Curah Hujan (mm) [X2]", 0.0, 200.0, 65.0)
+jarak = st.sidebar.slider("Jarak Perjalanan (km) [X4]", 1.0, 500.0, 55.0)
+# Data Rata-rata 2025 dari Makalah
+penumpang_tahunan = 29074750 
 
-# --- PROSES DATA ---
-tiket, premi, prob, limit = hitung_layanan_travelshield(jarak, hujan, tipe)
+# --- PERHITUNGAN BERDASARKAN MAKALAH ---
+# 1. Ekspektasi Frekuensi (Y1) - Poisson (Dipengaruhi Curah Hujan X2)
+beta0, beta1 = -0.5, 0.008 
+y1_frekuensi = np.exp(beta0 + (beta1 * hujan))
 
-# --- PANEL UTAMA ---
-col1, col2 = st.columns(2)
+# 2. Ekspektasi Biaya/Severity (Y2) - Gamma (Dipengaruhi Jarak X4)
+# Sesuai Rumus Makalah: EY2 = e^(0.00007 * X4 + 19.070105)
+alpha0 = 19.070105
+alpha1 = 0.00007
+y2_severity = np.exp(alpha0 + (alpha1 * jarak))
 
-with col1:
-    st.metric(label="Harga Tiket Dasar", value=f"Rp {tiket:,.0f}")
-    st.metric(label="Premi Asuransi", value=f"Rp {premi:,.0f}")
+# 3. Premi Murni & Bruto
+total_klaim_setahun = y1_frekuensi * y2_severity * 12 
+premi_murni = total_klaim_setahun / penumpang_tahunan
+premi_bruto = premi_murni * 1.2 # Loading factor 20%
 
-with col2:
-    st.metric(label="Peluang Risiko", value=f"{prob*100:.4f}%")
-    st.metric(label="Limit Santunan", value=f"Rp {limit:,.0f}")
+# --- DISPLAY HASIL ---
+st.subheader("📊 Hasil Estimasi Aktuaria")
+c1, c2 = st.columns(2)
+with c1:
+    st.metric("Ekspektasi Frekuensi (Y1)", f"{y1_frekuensi:.4f}")
+    st.metric("Premi Murni", f"Rp {premi_murni:,.0f}")
+with c2:
+    st.metric("Ekspektasi Biaya (Y2)", f"Rp {y2_severity:,.0f}")
+    st.metric("Premi Bruto (Harga Jual)", f"Rp {premi_bruto:,.0f}")
 
-st.info(f"**Total Pembayaran: Rp {tiket + premi:,.0f}**")
-
-# --- FITUR REFUND & KLAIM ---
-st.markdown("### 📋 Simulasi Klaim & Refund")
-tab1, tab2 = st.tabs(["Klaim Keterlambatan", "Pembatalan Tiket"])
-
-with tab1:
-    menit = st.number_input("Menit Keterlambatan Kereta", 0, 300, 0)
-    if menit > 30:
-        refund_val = tiket * (0.25 if menit <= 60 else 0.5 if menit <= 120 else 1.0)
-        st.success(f"Anda Berhak Klaim Refund: **Rp {refund_val:,.0f}**")
-    else:
-        st.write("Keterlambatan di bawah 30 menit tidak mendapatkan kompensasi.")
-
-with tab2:
-    alasan = st.selectbox("Alasan Pembatalan", ["Pribadi", "Sakit/Darurat"])
-    if st.button("Proses Refund Tiket"):
-        persen = 1.0 if alasan == "Sakit/Darurat" else 0.75
-        st.warning(f"Dana Refund dikembalikan: **Rp {tiket * persen:,.0f}** ({int(persen*100)}%)")
-
+# --- FITUR GPS & TRACKING ---
 st.markdown("---")
-st.caption("© 2026 TravelShield 360 - Aktuaria Digital untuk Moda Kereta Api")
+st.header("📍 Live Journey & GPS Tracking")
+st.write("Fitur ini melacak konsumen untuk mencegah keterlambatan.")
+if st.button("Aktifkan Pelacakan GPS"):
+    st.success("GPS Aktif: Pengguna dalam pengawasan risiko real-time")
+    # Koordinat simulasi (Surabaya)
+    st.map({"lat": [-7.25], "lon": [112.75]}) 
+    
+    if hujan > 100:
+        st.error("⚠️ Peringatan: Jalur terdeteksi cuaca ekstrem. Disarankan berangkat 30 menit lebih awal!")
+    else:
+        st.info("✅ Kondisi aman. Estimasi tiba tepat waktu.")
+
+# --- SIMULASI KLAIM ---
+with st.expander("📝 Cek Kelayakan Klaim"):
+    menit = st.number_input("Input Keterlambatan Kereta (Menit):", 0, 500, 0)
+    if menit > 60:
+        st.success(f"Klaim Diterima! Estimasi Santunan: Rp {y2_severity * 0.0001:,.0f}")
+    else:
+        st.info("Keterlambatan di bawah 60 menit tidak masuk kriteria klaim.")
