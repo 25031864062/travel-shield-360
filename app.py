@@ -1,14 +1,13 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import PoissonRegressor
 
 # ===============================
 # KONFIGURASI HALAMAN
 # ===============================
 
 st.set_page_config(
-    page_title="TravelShield 360 Dashboard",
+    page_title="TravelShield 360",
     page_icon="🛡️",
     layout="wide"
 )
@@ -16,74 +15,34 @@ st.set_page_config(
 st.title("🛡️ TravelShield 360")
 st.subheader("Dashboard Aktuaria Risiko Perjalanan Kereta")
 
-# ===============================
-# GENERATE DATA SIMULASI
-# ===============================
-
-np.random.seed(42)
-
-n = 1000
-
-data = pd.DataFrame({
-    "hujan": np.random.uniform(0,200,n),
-    "jarak": np.random.uniform(10,500,n),
-    "harga_tiket": np.random.uniform(50000,400000,n),
-    "kepadatan": np.random.uniform(0.3,1.0,n),
-    "jam": np.random.randint(0,24,n)
-})
-
-data["jenis_kereta"] = np.random.choice([0,1,2],n)
-
-lambda_claim = np.exp(
-    -3
-    +0.01*data["hujan"]
-    +0.002*data["jarak"]
-    +0.000002*data["harga_tiket"]
-    +1.2*data["kepadatan"]
-    +0.03*data["jam"]
-    +0.2*data["jenis_kereta"]
+st.write(
+"Model ini menggunakan pendekatan **Poisson Frequency Model** untuk estimasi klaim."
 )
 
-data["klaim"] = np.random.poisson(lambda_claim)
-
 # ===============================
-# TRAIN MODEL
-# ===============================
-
-X = data[[
-"hujan",
-"jarak",
-"harga_tiket",
-"kepadatan",
-"jam",
-"jenis_kereta"
-]]
-
-y = data["klaim"]
-
-model = PoissonRegressor()
-model.fit(X,y)
-
-# ===============================
-# SIDEBAR INPUT
+# SIDEBAR INPUT VARIABEL RISIKO
 # ===============================
 
 st.sidebar.header("Parameter Risiko")
 
-hujan = st.sidebar.slider("Curah Hujan (mm)",0,200,60)
+hujan = st.sidebar.slider(
+"Curah Hujan (mm)",0,200,60
+)
 
-jarak = st.sidebar.slider("Jarak Perjalanan (km)",10,500,100)
+jarak = st.sidebar.slider(
+"Jarak Perjalanan (km)",10,500,100
+)
 
-harga = st.sidebar.slider("Harga Tiket (Rp)",50000,400000,150000)
+harga = st.sidebar.slider(
+"Harga Tiket (Rp)",50000,400000,150000
+)
 
 kepadatan = st.sidebar.slider(
-"Kepadatan Penumpang",
-0.3,1.0,0.6
+"Kepadatan Penumpang",0.3,1.0,0.6
 )
 
 jam = st.sidebar.slider(
-"Jam Perjalanan",
-0,23,12
+"Jam Perjalanan",0,23,12
 )
 
 jenis = st.sidebar.selectbox(
@@ -91,6 +50,7 @@ jenis = st.sidebar.selectbox(
 ["Ekonomi","Bisnis","Eksekutif"]
 )
 
+# encoding jenis kereta
 jenis_map = {
 "Ekonomi":0,
 "Bisnis":1,
@@ -100,31 +60,37 @@ jenis_map = {
 jenis_val = jenis_map[jenis]
 
 # ===============================
-# PREDIKSI MODEL
+# MODEL POISSON (MANUAL GLM)
 # ===============================
 
-input_df = pd.DataFrame({
-"hujan":[hujan],
-"jarak":[jarak],
-"harga_tiket":[harga],
-"kepadatan":[kepadatan],
-"jam":[jam],
-"jenis_kereta":[jenis_val]
-})
+lambda_claim = np.exp(
+-3
++0.01*hujan
++0.002*jarak
++0.000002*harga
++1.2*kepadatan
++0.03*jam
++0.2*jenis_val
+)
 
-freq = model.predict(input_df)[0]
-
+# severity (nilai klaim)
 severity = harga
 
-premi = freq * severity
+# premi aktuaria
+premi = lambda_claim * severity
 
 # ===============================
 # DASHBOARD METRIC
 # ===============================
 
+st.markdown("---")
+
 col1,col2,col3 = st.columns(3)
 
-col1.metric("Expected Claim Frequency",round(freq,4))
+col1.metric(
+"Expected Claim Frequency",
+round(lambda_claim,4)
+)
 
 col2.metric(
 "Severity",
@@ -137,18 +103,22 @@ f"Rp {premi:,.0f}".replace(",",".")
 )
 
 # ===============================
-# GRAFIK DISTRIBUSI KLAIM
+# SIMULASI DISTRIBUSI KLAIM
 # ===============================
 
 st.markdown("---")
-st.subheader("Distribusi Klaim")
+st.subheader("Simulasi Distribusi Klaim")
 
-chart_data = data["klaim"].value_counts().sort_index()
+np.random.seed(42)
 
-st.bar_chart(chart_data)
+sim_claim = np.random.poisson(lambda_claim,1000)
+
+df_chart = pd.DataFrame(sim_claim,columns=["klaim"])
+
+st.bar_chart(df_chart.value_counts())
 
 # ===============================
-# PETA SIMULASI
+# PETA SIMULASI LOKASI
 # ===============================
 
 st.markdown("---")
@@ -202,3 +172,4 @@ if jenis_klaim == "Pembatalan Perjalanan":
         st.success(
         f"Refund 100% Tiket: Rp {santunan:,.0f}".replace(",",".")
         )
+    
