@@ -1,11 +1,10 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from sklearn.linear_model import PoissonRegressor
 
 # ===============================
-# KONFIGURASI
+# KONFIGURASI HALAMAN
 # ===============================
 
 st.set_page_config(
@@ -92,7 +91,6 @@ jenis = st.sidebar.selectbox(
 ["Ekonomi","Bisnis","Eksekutif"]
 )
 
-# encoding jenis kereta
 jenis_map = {
 "Ekonomi":0,
 "Bisnis":1,
@@ -102,7 +100,7 @@ jenis_map = {
 jenis_val = jenis_map[jenis]
 
 # ===============================
-# PREDIKSI
+# PREDIKSI MODEL
 # ===============================
 
 input_df = pd.DataFrame({
@@ -139,23 +137,18 @@ f"Rp {premi:,.0f}".replace(",",".")
 )
 
 # ===============================
-# DISTRIBUSI KLAIM
+# GRAFIK DISTRIBUSI KLAIM
 # ===============================
 
 st.markdown("---")
 st.subheader("Distribusi Klaim")
 
-fig,ax = plt.subplots()
+chart_data = data["klaim"].value_counts().sort_index()
 
-ax.hist(data["klaim"],bins=20)
-
-ax.set_xlabel("Jumlah Klaim")
-ax.set_ylabel("Frekuensi")
-
-st.pyplot(fig)
+st.bar_chart(chart_data)
 
 # ===============================
-# PETA LOKASI
+# PETA SIMULASI
 # ===============================
 
 st.markdown("---")
