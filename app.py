@@ -2,9 +2,9 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
-# ===============================
+# =====================================
 # KONFIGURASI HALAMAN
-# ===============================
+# =====================================
 
 st.set_page_config(
     page_title="TravelShield 360",
@@ -15,42 +15,29 @@ st.set_page_config(
 st.title("🛡️ TravelShield 360")
 st.subheader("Dashboard Aktuaria Risiko Perjalanan Kereta")
 
-st.write(
-"Model ini menggunakan pendekatan **Poisson Frequency Model** untuk estimasi klaim."
-)
+st.write("Model menggunakan pendekatan **Poisson Frequency Model** untuk estimasi klaim.")
 
-# ===============================
-# SIDEBAR INPUT VARIABEL RISIKO
-# ===============================
+# =====================================
+# SIDEBAR INPUT
+# =====================================
 
 st.sidebar.header("Parameter Risiko")
 
-hujan = st.sidebar.slider(
-"Curah Hujan (mm)",0,200,60
-)
+hujan = st.sidebar.slider("Curah Hujan (mm)",0,200,60)
 
-jarak = st.sidebar.slider(
-"Jarak Perjalanan (km)",10,500,100
-)
+jarak = st.sidebar.slider("Jarak Perjalanan (km)",10,500,100)
 
-harga = st.sidebar.slider(
-"Harga Tiket (Rp)",50000,400000,150000
-)
+harga = st.sidebar.slider("Harga Tiket (Rp)",50000,400000,150000)
 
-kepadatan = st.sidebar.slider(
-"Kepadatan Penumpang",0.3,1.0,0.6
-)
+kepadatan = st.sidebar.slider("Kepadatan Penumpang",0.3,1.0,0.6)
 
-jam = st.sidebar.slider(
-"Jam Perjalanan",0,23,12
-)
+jam = st.sidebar.slider("Jam Perjalanan",0,23,12)
 
 jenis = st.sidebar.selectbox(
 "Jenis Kereta",
 ["Ekonomi","Bisnis","Eksekutif"]
 )
 
-# encoding jenis kereta
 jenis_map = {
 "Ekonomi":0,
 "Bisnis":1,
@@ -59,9 +46,9 @@ jenis_map = {
 
 jenis_val = jenis_map[jenis]
 
-# ===============================
-# MODEL POISSON (MANUAL GLM)
-# ===============================
+# =====================================
+# MODEL POISSON
+# =====================================
 
 lambda_claim = np.exp(
 -3
@@ -73,15 +60,13 @@ lambda_claim = np.exp(
 +0.2*jenis_val
 )
 
-# severity (nilai klaim)
 severity = harga
 
-# premi aktuaria
 premi = lambda_claim * severity
 
-# ===============================
-# DASHBOARD METRIC
-# ===============================
+# =====================================
+# METRIC DASHBOARD
+# =====================================
 
 st.markdown("---")
 
@@ -102,9 +87,9 @@ col3.metric(
 f"Rp {premi:,.0f}".replace(",",".")
 )
 
-# ===============================
+# =====================================
 # SIMULASI DISTRIBUSI KLAIM
-# ===============================
+# =====================================
 
 st.markdown("---")
 st.subheader("Simulasi Distribusi Klaim")
@@ -113,13 +98,24 @@ np.random.seed(42)
 
 sim_claim = np.random.poisson(lambda_claim,1000)
 
-df_chart = pd.DataFrame(sim_claim,columns=["klaim"])
+df_chart = pd.DataFrame({
+"Jumlah Klaim":sim_claim
+})
 
-st.bar_chart(df_chart.value_counts())
+dist = df_chart["Jumlah Klaim"].value_counts().sort_index()
 
-# ===============================
-# PETA SIMULASI LOKASI
-# ===============================
+dist_df = pd.DataFrame({
+"Klaim":dist.index,
+"Frekuensi":dist.values
+})
+
+st.bar_chart(
+dist_df.set_index("Klaim")
+)
+
+# =====================================
+# PETA SIMULASI
+# =====================================
 
 st.markdown("---")
 st.subheader("Simulasi Lokasi Kereta")
@@ -131,9 +127,9 @@ map_data = pd.DataFrame({
 
 st.map(map_data)
 
-# ===============================
+# =====================================
 # SIMULASI KLAIM
-# ===============================
+# =====================================
 
 st.markdown("---")
 st.subheader("Simulasi Klaim")
@@ -172,4 +168,3 @@ if jenis_klaim == "Pembatalan Perjalanan":
         st.success(
         f"Refund 100% Tiket: Rp {santunan:,.0f}".replace(",",".")
         )
-    
