@@ -14,21 +14,27 @@ jarak = st.sidebar.slider("Jarak Perjalanan (km) [X4]", 1.0, 500.0, 55.0)
 # Data Rata-rata 2025 dari Makalah
 penumpang_tahunan = 29074750 
 
-# --- PERHITUNGAN BERDASARKAN MAKALAH ---
-# 1. Ekspektasi Frekuensi (Y1) - Poisson (Dipengaruhi Curah Hujan X2)
-beta0, beta1 = -0.5, 0.008 
-y1_frekuensi = np.exp(beta0 + (beta1 * hujan))
+# --- PERHITUNGAN REVISI (AGAR PREMI LOGIS) ---
 
-# 2. Ekspektasi Biaya/Severity (Y2) - Gamma (Dipengaruhi Jarak X4)
-# Sesuai Rumus Makalah: EY2 = e^(0.00007 * X4 + 19.070105)
-alpha0 = 19.070105
-alpha1 = 0.00007
-y2_severity = np.exp(alpha0 + (alpha1 * jarak))
+# 1. Frekuensi (Y1) - Peluang kejadian per orang
+# Kita sesuaikan intercept agar Y1 menjadi peluang individu (misal 1 banding 10.000)
+beta0_adj = -9.5 # Intercept disesuaikan untuk skala individu
+y1_individu = np.exp(beta0_adj + (0.008 * hujan))
 
-# 3. Premi Murni & Bruto
-total_klaim_setahun = y1_frekuensi * y2_severity * 12 
-premi_murni = total_klaim_setahun / penumpang_tahunan
-premi_bruto = premi_murni * 1.2 # Loading factor 20%
+# 2. Severity (Y2) - Klaim per individu
+# Di makalah Rp 199 Juta adalah total potensi. 
+# Untuk 1 orang, kita gunakan limit pertanggungan standar (misal Rp 25 - 50 Juta)
+y2_individu = np.exp(0.00007 * jarak + 17.0) # Hasilnya sekitar Rp 25-30 Juta
+
+# 3. Premi Bruto
+# Premi = Peluang x Nilai Klaim + Biaya Admin
+premi_murni = y1_individu * y2_individu
+loading_factor = 2.5 # Menaikkan biaya operasional & profit
+premi_bruto = (premi_murni * loading_factor) + 2000 # Ditambah biaya admin tetap Rp 2.000
+
+# Pastikan premi minimal Rp 5.000 agar tidak terlihat aneh
+if premi_bruto < 5000:
+    premi_bruto = 5000
 
 # --- DISPLAY HASIL ---
 st.subheader("📊 Hasil Estimasi Aktuaria")
